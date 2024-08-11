@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default",
+      "generator": "Ninja",
+      "binaryDir": "build",
+      "toolchainFile": "/Users/cowpox/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_CROSSCOMPILING_EMULATOR": "/opt/homebrew/bin/node"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "default",
+      "configuration": "Debug"
+    },
+    {
+      "name": "Release",
+      "configurePreset": "default",
+      "configuration": "Release"
+    }
+  ]
+}
