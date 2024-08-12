@@ -4,59 +4,33 @@
 
 #ifndef CLASS_INSTANCE_H
 #define CLASS_INSTANCE_H
+#include "base_klass.h"
 #include "classfile.h"
+#include <unordered_map>
 #include "constant_pool.h"
 
 namespace bjvm {
-
-struct VM;
-
-enum class Status {
-  Error,
-  Loaded,
-  Linked,
-  Initialised,
-};
-
-class ClassInstance {
+/**
+ * Class object for a non-array class.
+ */
+class PlainKlass : public BaseKlass {
   classfile::Classfile* m_classfile = nullptr;
 
-  Status m_status = Status::Loaded;
+  std::vector<PlainKlass*> m_superinterfaces;
 
-  std::unordered_map<std::string, classfile::MethodInfo*> m_static_methods;
+  std::unordered_map<std::string, classfile::MethodInfo*> _methods;
   std::unordered_map<std::string, classfile::MethodInfo*> m_instance_methods;
 
-  std::vector<uint64_t> m_static_fields;
-
-  int m_instance_field_count = 0;
-
-  // TODO add loaders
-
-  [[nodiscard]] bool LinkSuperClass(VM* vm);
-
-  [[nodiscard]] bool LinkInterfaces(VM* vm);
-
-  [[nodiscard]] bool LinkFields(VM* vm);
-
-  [[nodiscard]] bool LinkMethods(VM* vm);
-
-  [[nodiscard]] bool LinkAttributes(VM* vm);
+protected:
+  int m_size_bytes = 0;
 
 public:
-  ClassInstance(classfile::Classfile* classfile) : m_classfile(classfile) {}
+  explicit PlainKlass(std::string&& name, classfile::Classfile* classfile,
+    PlainKlass* superclass, std::vector<PlainKlass*> superinterfaces);
 
-  ClassInstance(ClassInstance&&) = delete;
-  ClassInstance(const ClassInstance&) = delete;
+  [[nodiscard]] bool Link(VM* vm) override;
 
-  Status GetStatus() const {
-    return m_status;
-  }
-
-  [[nodiscard]] bool Link(VM* vm);
-
-  [[nodiscard]] bool InitClass(VM* vm) {
-    return true;
-  }
+  bool IsPlainObjectKlass() override;
 
   classfile::MethodInfo* FindStaticMethod(const char * str, const char * text) {
     return nullptr;
@@ -66,9 +40,9 @@ public:
     return (static_cast<int>(m_classfile->m_access_flags) & static_cast<int>(classfile::AccessFlags::ACC_INTERFACE)) != 0;
   }
 
-  classfile::FieldInfo * GetFieldInfo(const std::string & string) {
+  classfile::FieldInfo *GetField(VM* vm, const std::string & string) override {
     for (auto& field : m_classfile->m_fields) {
-      if (m_classfile->m_cp.GetUtf8(field.m_name_index) == string) {
+      if (field.m_name == string) {
         return &field;
       }
     }
@@ -76,14 +50,32 @@ public:
     return nullptr;
   }
 
-  classfile::MethodInfo * GetMethodInfo(const std::string &method_name, const std::string &descriptor) {
+  classfile::MethodInfo * GetMethod(VM* vm, const std::string &method_name, const std::string &descriptor, bool set_vm_error) override {
     for (auto& method : m_classfile->m_methods) {
-      if (m_classfile->m_cp.GetUtf8(method.m_name_index) == method_name &&
-          m_classfile->m_cp.GetUtf8(method.m_descriptor_index) == descriptor) {
+      if (method.m_name == method_name &&
+          method.m_descriptor == descriptor) {
         return &method;
       }
     }
+
+    // Search in superclass
+    if (m_superclass) {
+      auto* method = m_superclass->GetMethod(vm, method_name, descriptor, set_vm_error);
+      if (method) return method;
+    }
+
+    // Search in interfaces
+    for (auto& interface : m_superinterfaces) {
+      auto* method = interface->GetMethod(vm, method_name, descriptor, set_vm_error);
+      if (method) return method;
+    }
+
+    return nullptr;
   }
+
+  bool IsInterface() override;
+
+  int GetSizeBytes() const;
 };
 
 } // bjvm

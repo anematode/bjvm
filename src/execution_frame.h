@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <vector>
 
-namespace bjvm {
+#include "utilities.h"
 
-using FrameEntry = uint64_t;
+namespace bjvm {
 
 /**
  * A single execution frame on the call stack. No type checking is performed during bytecode interpretation as this is
@@ -19,9 +19,9 @@ using FrameEntry = uint64_t;
  * In the future this might be a variable length struct e.g. for better cache locality, since we know max_locals
  * and max_stack.
  */
-class ExecutionFrame {
- std::vector<FrameEntry> m_locals;
- std::vector<FrameEntry> m_stack;
+struct ExecutionFrame {
+ std::vector<jvalue> m_locals;
+ std::vector<jvalue> m_stack;
 
  int m_stack_index = 0;
  int m_instruction_index = 0;

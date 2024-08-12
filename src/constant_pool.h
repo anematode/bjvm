@@ -9,8 +9,9 @@
 #include "byte_reader.h"
 
 namespace bjvm {
+class HeapObject;
 
-struct ConstantPool;
+class ConstantPool;
 
 struct EntryUtf8 {
   std::string m_value;
@@ -42,11 +43,13 @@ struct EntryDouble {
   std::string ToString(const ConstantPool* _cp) const;
 };
 
-struct ClassInstance;
+class BaseKlass;
 struct EntryClass {
   uint16_t m_name_index;
 
-  ClassInstance* m_instance = nullptr;
+  EntryUtf8* m_name;
+
+  BaseKlass* m_instance = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
 };
@@ -58,7 +61,10 @@ namespace native {
 struct EntryString {
   uint16_t string_index;
 
+  HeapObject* m_thestring = nullptr;
   native::String* m_string = nullptr;
+
+  EntryUtf8* m_utf8 = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
 };
@@ -68,18 +74,30 @@ struct FieldInfo;
 struct MethodInfo;
 }
 
+struct EntryNameAndType;
+
 struct EntryFieldRef {
   uint16_t struct_index;
   uint16_t name_and_type_index;
 
+  EntryClass* m_struct;
+  EntryNameAndType* m_name_and_type;
+
   classfile::FieldInfo* m_field_info = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
+
+  bool IsStatic() const;
 };
 
 struct EntryMethodRef {
   uint16_t struct_index;
   uint16_t name_and_type_index;
+
+  EntryClass* m_struct;
+  EntryNameAndType* m_name_and_type;
+
+  int arity;
 
   classfile::MethodInfo* m_method_info = nullptr;
 
@@ -98,6 +116,9 @@ struct EntryInterfaceMethodRef {
 struct EntryNameAndType {
   uint16_t name_index;
   uint16_t descriptor_index;
+
+  EntryUtf8* m_name;
+  EntryUtf8* m_descriptor;
 
   std::string ToString(const ConstantPool* cp) const;
 };

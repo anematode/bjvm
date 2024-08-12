@@ -5,7 +5,12 @@
 #include "heap_object.h"
 
 namespace bjvm {
+HeapObject::HeapObject(BaseKlass *klass): m_class(klass) {}
+
 int HeapObject::IdentityHashCode() const {
-  return reinterpret_cast<int>(this);
+  int result;
+  const HeapObject* s = this;
+  memcpy(&result, &s, sizeof(int));
+  return result;
 }
 } // bjvm

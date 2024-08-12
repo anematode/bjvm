@@ -1,5 +1,7 @@
 #include <iostream>
+#ifdef EMSCRIPTEN
 #include <emscripten.h>
+#endif
 
 #include <cstdlib>
 

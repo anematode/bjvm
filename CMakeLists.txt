@@ -32,8 +32,9 @@ set_target_properties(
 add_dependencies(ziplib BuildZiplib)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "-O3 -fexceptions -fwasm-exceptions")
-set(EmscriptenFlags "-g -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s TOTAL_MEMORY=1024MB")
+#set(CMAKE_CXX_FLAGS "-O0 -fexceptions -fwasm-exceptions")
+set(CMAKE_CXX_FLAGS "-O2 -fsanitize=address,undefined -Wall")
+# set(EmscriptenFlags "-g -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s TOTAL_MEMORY=1024MB")
 
 add_library(bjvm OBJECT src/classfile.cc src/classfile.h src/constant_pool.cc src/constant_pool.h src/byte_reader.cc
         src/execution_frame.cc
@@ -49,7 +50,21 @@ add_library(bjvm OBJECT src/classfile.cc src/classfile.h src/constant_pool.cc sr
         src/native/string.cc
         src/native/string.h
         src/class_instance.cc
-        src/class_instance.h)
+        src/class_instance.h
+        src/base_klass.cc
+        src/base_klass.h
+        src/array_klass.cc
+        src/array_klass.h
+        src/primitive_array_klass.cc
+        src/primitive_array_klass.h
+        src/object_array_klass.cc
+        src/object_array_klass.h
+        src/string_interner.cc
+        src/string_interner.h
+        src/array_object.cc
+        src/array_object.h
+        src/native/class.cc
+        src/native/class.h)
 
 # target_link_libraries(bjvm PRIVATE ziplib)
 

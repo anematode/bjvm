@@ -7,6 +7,8 @@
 #include <filesystem>
 #ifdef EMSCRIPTEN
 #include <emscripten.h>
+#else
+#include <fstream>
 #endif
 
 namespace bjvm {

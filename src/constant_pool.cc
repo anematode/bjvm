@@ -5,6 +5,8 @@
 #include "constant_pool.h"
 #include <iostream>
 
+#include "utilities.h"
+
 namespace bjvm {
 
 std::string EntryClass::ToString(const ConstantPool *cp) const {
@@ -145,6 +147,33 @@ ConstantPool ConstantPool::parse(ByteReader *reader) {
 
   if (index > size) {
     throw std::runtime_error("Invalid constant pool size");
+  }
+
+  // Fill in pointer entries
+  for (int i = 1; i < cp.Size(); ++i) {
+    auto entry = cp.GetAny(i);
+
+    std::visit(overloaded {
+      [&] (EntryNameAndType& entry) {
+        entry.m_descriptor = cp.Get<EntryUtf8>(entry.descriptor_index);
+        entry.m_name = cp.Get<EntryUtf8>(entry.name_index);
+      },
+      [&] (EntryFieldRef& entry) {
+        entry.m_struct = cp.Get<EntryClass>(entry.struct_index);
+        entry.m_name_and_type = cp.Get<EntryNameAndType>(entry.name_and_type_index);
+      },
+      [&] (EntryMethodRef& entry) {
+        entry.m_struct = cp.Get<EntryClass>(entry.struct_index);
+        entry.m_name_and_type = cp.Get<EntryNameAndType>(entry.name_and_type_index);
+      },
+      [&] (EntryClass& klass) {
+        klass.m_name = cp.Get<EntryUtf8>(klass.m_name_index);
+      },
+      [&] (EntryString& str) {
+        str.m_utf8 = cp.Get<EntryUtf8>(str.string_index);
+      },
+      [] (auto &&arg) {}
+    }, *entry);
   }
 
   return cp;

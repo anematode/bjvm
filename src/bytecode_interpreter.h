@@ -10,14 +10,14 @@
 
 namespace bjvm {
 class VM;
+class ConstantPool;
+namespace classfile {
+struct MethodInfo;
+}
 
 class BytecodeInterpreter {
-  VM* m_vm;
-
-  std::vector<ExecutionFrame> m_frames;
-
 public:
-  bool step();
+  jvalue execute(VM* vm, classfile::MethodInfo* method_info);
 };
 
 } // bjvm

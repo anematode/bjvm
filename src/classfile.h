@@ -9,13 +9,18 @@
 #include <cassert>
 #include <vector>
 #include <algorithm>
-#include <exception>
+#include <optional>
 #include <iostream>
+#include <cstdint>
 #include "byte_reader.h"
 #include "constant_pool.h"
 
-namespace bjvm::classfile {
+namespace bjvm {
 
+struct ParsedMethodDescriptor;
+class PlainKlass;
+
+namespace classfile {
 /** Exception thrown when a classfile fails verification. For now we'll do very light verification. */
 struct VerifyError : std::runtime_error {
   int m_offset;
@@ -39,15 +44,15 @@ enum class InsnCode : uint8_t {
   d2l, dadd, daload, dastore, dcmpg, dcmpl, ddiv, dmul, dneg, drem, dreturn, dsub, dup, dup_x1, dup_x2, dup2, dup2_x1,
   dup2_x2, f2d, f2i, f2l, fadd, faload, fastore, fcmpg, fcmpl, fdiv, fmul, fneg, frem, freturn, fsub, i2b, i2c,
   i2d, i2f, i2l, i2s, iadd, iaload, iand, iastore, idiv, imul, ineg, ior, irem, ireturn, ishl, ishr, isub, iushr, ixor, l2d,
-  l2f, l2i, ladd, laload, land, lastore, lcmp, ldc, ldc2_w, ldiv, lmul, lneg, lor, lrem, lreturn, lshl, lshr,
+  l2f, l2i, ladd, laload, land, lastore, lcmp, ldiv, lmul, lneg, lor, lrem, lreturn, lshl, lshr,
   lsub, lushr, lxor, monitorenter, monitorexit, pop, pop2, return_, saload, sastore, swap,
-
-  /** Indexes into local variable table */
-  dload, fload, iload, lload, dstore, fstore, istore, lstore, aload, astore,
 
   /** Indexes into constant pool */
   anewarray, checkcast, getfield, getstatic, instanceof, invokedynamic, new_, putfield, putstatic, invokevirtual,
-  invokespecial, invokestatic,
+  invokespecial, invokestatic, ldc, ldc2_w,
+
+  /** Indexes into local variable table */
+  dload, fload, iload, lload, dstore, fstore, istore, lstore, aload, astore,
 
   /** Indexes into instruction table */
   goto_, jsr,
@@ -63,8 +68,10 @@ enum class InsnCode : uint8_t {
 };
 
 enum class PrimitiveType : uint8_t {
-  boolean, byte, char_, short_, int_, long_, float_, double_
+  boolean, byte, char_, short_, int_, long_, float_, double_, void_
 };
+
+std::optional<PrimitiveType> ParsePrimitiveType(char c);
 
 const char* CodeName(InsnCode code);
 
@@ -91,12 +98,12 @@ struct IIncData {
 };
 
 struct InvokeInterfaceData {
-  uint16_t m_index;
+  ConstantPoolEntry* m_index;
   uint8_t m_count;
 };
 
 struct MultianewarrayData {
-  uint16_t m_index;
+  ConstantPoolEntry* m_index;
   uint8_t m_dims;
 };
 
@@ -109,10 +116,13 @@ struct ParseContext {
   std::vector<TableswitchData> m_tableswitches;
   std::vector<LookupswitchData> m_lookupswitches;
 
-  const ConstantPool* cp;
+  ConstantPool* cp;
+
+  int current_static_field_index;
+  int current_instance_field_index;
+
 
   long MakeTableswitch(TableswitchData&& data);
-
   long MakeLookupswitch(LookupswitchData&& data);
 };
 
@@ -145,6 +155,8 @@ class Insn {
     InvokeInterfaceData ii;
     // multianewarray
     MultianewarrayData mna;
+    // Constant pool entry
+    ConstantPoolEntry* cp;
   } m_data = { .imm = 0L };
   InsnCode m_code = InsnCode::nop;
   int m_pc = 0;
@@ -159,6 +171,9 @@ public:
 
   /** Get the constant pool index, local variable index, or instruction index of this bytecode instruction. */
   uint16_t Index() const;
+
+  ConstantPoolEntry *GetConstantPoolEntry();
+  const ConstantPoolEntry *GetConstantPoolEntry() const;
 
   /** Get the instruction's program counter. */
   uint16_t GetPC() const;
@@ -326,13 +341,18 @@ enum class FieldAccessFlags {
  */
 struct FieldInfo {
   FieldAccessFlags m_access_flags;
-  uint16_t m_name_index;
-  uint16_t m_descriptor_index;
+
+  std::string m_name;
+  std::string m_descriptor;
+
+  // Offset in bytes to the field
+  int m_static_or_instance_offset = -1;
 
   // If the field is static, this is the value it takes on
   std::optional<ConstantValueAttribute> m_constant_value;
 
   static FieldInfo parse(ByteReader* reader, ParseContext* ctx);
+  bool IsStatic() const;
 };
 
 enum class MethodAccessFlags {
@@ -352,12 +372,21 @@ enum class MethodAccessFlags {
 
 struct MethodInfo {
   MethodAccessFlags m_access_flags;
-  uint16_t m_name_index;
-  uint16_t m_descriptor_index;
 
+  std::string m_name;
+  std::string m_descriptor;
+
+  PlainKlass* m_klass;
+
+  ParsedMethodDescriptor* m_parsed_descriptor = nullptr;
   std::optional<CodeAttribute> m_code;
 
+  int m_arity;
+
   static MethodInfo parse(ByteReader* reader, ParseContext* parse_context);
+
+  bool IsNative() const;
+  bool HasReturn() const;
 
   std::string ToString(ConstantPool *p_pool) const {
     throw std::runtime_error("unimplemented");
@@ -368,6 +397,14 @@ struct MethodInfo {
    * @param ctx The parse context.
    */
   void FixupSwitchInstructions(ParseContext * ctx);
+
+  int GetArity() const;
+
+  std::string ToJNIString() const;
+
+  MethodInfo();
+  MethodInfo(MethodInfo&&) noexcept;
+  ~MethodInfo();
 };
 
 /**
@@ -391,6 +428,9 @@ public:
   std::vector<MethodInfo> m_methods;
 
   std::optional<BootstrapMethodsAttribute> m_bootstrap_methods;
+
+  int m_static_field_count;
+  int m_instance_fields;
 
   /**
    * Parse a classfile from a reader.
@@ -420,8 +460,11 @@ public:
   std::optional<std::string> GetSuperclassName() const;
 
   std::vector<std::string> GetInterfaceNames() const;
+
+  void SetKlassPointer(PlainKlass* klass);
 };
 
+}
 }
 
 #endif //BROWSER_JVM_CLASSFILE_H

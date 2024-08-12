@@ -5,9 +5,9 @@
 #include "classfile.h"
 
 #include <sstream>
-#include <iostream>
 
 #include "utilities.h"
+#include "vm.h"
 
 namespace bjvm::classfile {
 
@@ -249,8 +249,6 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
   auto opc = reader->NextU8("instruction opcode");
   using IC = InsnCode;
 
-  // std::cout << "Parsing " << std::to_string(opc) << " at offset " << reader->GetOffs() << '\n';
-
   switch (opc) {
     case nop: return Insn(IC::nop);
     case aconst_null: return Insn(IC::aconst_null);
@@ -264,9 +262,9 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
       return Insn(IC::dconst, { .d_imm = static_cast<double>(opc - dconst_0) });
     case bipush: return Insn(IC::iconst, { .imm = reader->NextI8("bipush immediate") });
     case sipush: return Insn(IC::iconst, { .imm = reader->NextI16("sipush immediate") });
-    case ldc: return Insn(IC::ldc, { .index = reader->NextU8("ldc index") });
-    case ldc_w: return Insn(IC::ldc, { .index = reader->NextU16("ldc_w index") });
-    case ldc2_w: return Insn(IC::ldc2_w, { .index = reader->NextU16("ldc_w index") });
+    case ldc: return Insn(IC::ldc, { .cp = ctx->cp->GetAny(reader->NextU8("ldc index")) });
+    case ldc_w: return Insn(IC::ldc, { .cp = ctx->cp->GetAny(reader->NextU16("ldc_w index")) });
+    case ldc2_w: return Insn(IC::ldc2_w, { .cp = ctx->cp->GetAny(reader->NextU16("ldc_w index")) });
     case iload: return Insn(IC::iload, { .index = reader->NextU8("iload index") });
     case lload: return Insn(IC::lload, { .index = reader->NextU8("lload index") });
     case fload: return Insn(IC::fload, { .index = reader->NextU8("fload index") });
@@ -361,6 +359,7 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
     case iinc: {
       auto index = reader->NextU8("iinc index");
       auto imm = reader->NextI8("iinc immediate");
+      // Fix up later
       return Insn(IC::iinc, { .iinc = { index, imm }});
     }
     case i2l: return Insn(IC::i2l);
@@ -451,36 +450,40 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
     case areturn: return Insn(IC::areturn);
     case return_: return Insn(IC::return_);
 
-    case getstatic: return Insn(IC::getstatic, { .index = reader->NextU16("getstatic index") });
-    case putstatic: return Insn(IC::putstatic, { .index = reader->NextU16("putstatic index") });
+    case getstatic: return Insn(IC::getstatic, {
+      .cp = ctx->cp->GetAny(reader->NextU16("getstatic index"))
+    });
+    case putstatic: return Insn(IC::putstatic, {
+      .cp = ctx->cp->GetAny(reader->NextU16("putstatic index"))
+    });
 
-    case getfield: return Insn(IC::getfield, { .index = reader->NextU16("getfield index") });
-    case putfield: return Insn(IC::putfield, { .index = reader->NextU16("putfield index") });
+    case getfield: return Insn(IC::getfield, { .cp = ctx->cp->GetAny(reader->NextU16("getfield index")) });
+    case putfield: return Insn(IC::putfield, { .cp = ctx->cp->GetAny(reader->NextU16("putfield index")) });
 
-    case invokevirtual: return Insn(IC::invokevirtual, { .index = reader->NextU16("invokevirtual index") });
-    case invokespecial: return Insn(IC::invokespecial, { .index = reader->NextU16("invokespecial index") });
-    case invokestatic: return Insn(IC::invokestatic, { .index = reader->NextU16("invokestatic index") });
+    case invokevirtual: return Insn(IC::invokevirtual, { .cp = ctx->cp->GetAny(reader->NextU16("invokevirtual index")) });
+    case invokespecial: return Insn(IC::invokespecial, { .cp = ctx->cp->GetAny(reader->NextU16("invokespecial index")) });
+    case invokestatic: return Insn(IC::invokestatic, { .cp = ctx->cp->GetAny(reader->NextU16("invokestatic index")) });
     case invokeinterface: {
       auto index = reader->NextU16("invokeinterface index");
       auto count = reader->NextU8("invokeinterface count");
       reader->NextU8("invokeinterface padding");
-      return Insn(IC::invokeinterface, { .ii = { index, count } });
+      return Insn(IC::invokeinterface, { .ii = { ctx->cp->GetAny(index), count } });
     }
     case invokedynamic: {
       auto index = reader->NextU16("invokedynamic index");
       reader->NextU16("invokedynamic padding");
-      return Insn(IC::invokedynamic, { .index = index });
+      return Insn(IC::invokedynamic, { .cp = ctx->cp->GetAny(index) });
     }
     case new_: {
       auto index = reader->NextU16("new index");
-      return Insn(IC::new_, { .index = index });
+      return Insn(IC::new_, { .cp = ctx->cp->GetAny(index) });
     }
     case newarray: return Insn(IC::newarray, { .atype = CheckAType(reader->NextU8("newarray atype")) });
-    case anewarray: return Insn(IC::anewarray, { .index = reader->NextU16("anewarray index") });
+    case anewarray: return Insn(IC::anewarray, { .cp = ctx->cp->GetAny(reader->NextU16("anewarray index")) });
     case arraylength: return Insn(IC::arraylength);
     case athrow: return Insn(IC::athrow);
-    case checkcast: return Insn(IC::checkcast, { .index = reader->NextU16("checkcast index") });
-    case instanceof: return Insn(IC::instanceof, { .index = reader->NextU16("instanceof index") });
+    case checkcast: return Insn(IC::checkcast, { .cp = ctx->cp->GetAny(reader->NextU16("checkcast index")) });
+    case instanceof: return Insn(IC::instanceof, { .cp = ctx->cp->GetAny(reader->NextU16("instanceof index")) });
     case monitorenter: return Insn(IC::monitorenter);
     case monitorexit: return Insn(IC::monitorexit);
 
@@ -496,7 +499,10 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
         case fstore: return Insn(IC::fstore, { .index = reader->NextU16("wide fstore index") });
         case dstore: return Insn(IC::dstore, { .index = reader->NextU16("wide dstore index") });
         case astore: return Insn(IC::astore, { .index = reader->NextU16("wide astore index") });
-        case iinc: return Insn(IC::iinc, { .iinc = { reader->NextU16("wide iinc index"), reader->NextI16("wide iinc immediate") } });
+        case iinc: return Insn(IC::iinc, { .iinc = {
+          reader->NextU16("wide iinc index"),
+          reader->NextI16("wide iinc immediate")
+        } });
         case ret: return Insn(IC::ret, { .index = reader->NextU16("wide ret index") });
 
         default:
@@ -507,7 +513,7 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
     case multianewarray: {
       auto index = reader->NextU16("multianewarray index");
       auto dimensions = reader->NextU8("multianewarray dimensions");
-      return Insn(IC::multianewarray, { .mna = { index, dimensions } });
+      return Insn(IC::multianewarray, { .mna = { ctx->cp->GetAny(index), dimensions } });
     }
 
     case ifnull: return Insn(IC::ifnull, { .index = reader->NextU16("ifnull offset") });
@@ -526,7 +532,7 @@ bool Insn::IsIf() const {
 }
 
 bool Insn::ContainsBranch() const {
-  return m_code >= InsnCode::goto_ && m_code <= InsnCode::ifnull || m_code == InsnCode::tableswitch || m_code == InsnCode::lookupswitch;
+  return (m_code >= InsnCode::goto_ && m_code <= InsnCode::ifnull) || m_code == InsnCode::tableswitch || m_code == InsnCode::lookupswitch;
 }
 
 BootstrapMethodsAttribute BootstrapMethodsAttribute::parse(ByteReader *reader) {
@@ -656,8 +662,14 @@ FieldInfo FieldInfo::parse(ByteReader *reader, ParseContext *ctx) {
   FieldInfo info;
 
   info.m_access_flags = static_cast<FieldAccessFlags>(reader->NextU16("field access flags"));
-  info.m_name_index = reader->NextU16("field name index");
-  info.m_descriptor_index = reader->NextU16("field descriptor index");
+  info.m_name = ctx->cp->GetUtf8(reader->NextU16("field name index"));
+  info.m_descriptor = ctx->cp->GetUtf8(reader->NextU16("field descriptor index"));
+
+  if (info.IsStatic()) {
+    info.m_static_or_instance_offset = ctx->current_static_field_index++;
+  } else {
+    info.m_static_or_instance_offset = ctx->current_instance_field_index++;
+  }
 
   uint16_t attributes_count = reader->NextU16("field attributes count");
   for (int i = 0; i < attributes_count; i++) {
@@ -674,12 +686,47 @@ FieldInfo FieldInfo::parse(ByteReader *reader, ParseContext *ctx) {
   return info;
 }
 
+bool FieldInfo::IsStatic() const {
+  return (static_cast<int>(m_access_flags) & static_cast<int>(FieldAccessFlags::STATIC)) != 0;
+}
+
+
+std::pair<int, int> GetArityAndReturnCount(const std::string &descriptor) {
+  int arity = 0;
+  int return_count = 0;
+
+  size_t i = 0;
+
+  for (; i < descriptor.size(); i++) {
+    if (descriptor[i] == '(') {
+    } else if (descriptor[i] == ')') {
+      return_count = descriptor[i + 1] != 'V';
+      break;
+    } else if (descriptor[i] == 'L') {
+      while (descriptor[i] != ';') i++;
+      arity++;
+    } else if (descriptor[i] == '[') {
+      while (descriptor[i] == '[') i++;
+      if (descriptor[i] == 'L') {
+        while (descriptor[i] != ';') i++;
+      }
+      arity++;
+    } else {
+      arity++;
+    }
+  }
+
+  return { arity, return_count };
+}
+
 MethodInfo MethodInfo::parse(ByteReader *reader, ParseContext *parse_context) {
   MethodInfo info;
 
   info.m_access_flags = static_cast<MethodAccessFlags>(reader->NextU16("method access flags"));
-  info.m_name_index = reader->NextU16("method name index");
-  info.m_descriptor_index = reader->NextU16("method descriptor index");
+  info.m_name = parse_context->cp->GetUtf8(reader->NextU16("method name index"));
+  info.m_descriptor = parse_context->cp->GetUtf8(reader->NextU16("method descriptor index"));
+
+  info.m_arity = GetArityAndReturnCount(info.m_descriptor).first;
 
   // std::cout << "Parsing method " << parse_context->cp->GetUtf8(info.m_name_index) << '\n';
 
@@ -700,6 +747,14 @@ MethodInfo MethodInfo::parse(ByteReader *reader, ParseContext *parse_context) {
   return info;
 }
 
+bool MethodInfo::IsNative() const {
+  return (static_cast<int>(m_access_flags) & static_cast<int>(MethodAccessFlags::NATIVE)) != 0;
+}
+
+bool MethodInfo::HasReturn() const {
+  return *(m_descriptor.end() - 1) != 'V';
+}
+
 void MethodInfo::FixupSwitchInstructions(ParseContext *ctx) {
   if (!m_code.has_value()) return;
 
@@ -712,6 +767,22 @@ void MethodInfo::FixupSwitchInstructions(ParseContext *ctx) {
     }
   }
 }
+
+int MethodInfo::GetArity() const {
+  return m_arity;
+}
+
+std::string MethodInfo::ToJNIString() const {
+  assert(m_klass != nullptr);
+  std::string mangled = m_klass->GetName();
+  std::replace(mangled.begin(), mangled.end(), '/', '_');
+
+  return "Java_" + mangled + "_" + m_name;
+}
+
+MethodInfo::MethodInfo() = default;
+MethodInfo::MethodInfo(MethodInfo &&) noexcept = default;
+MethodInfo::~MethodInfo() = default;
 
 long ParseContext::MakeTableswitch(TableswitchData &&data) {
   m_tableswitches.push_back(data);
@@ -727,7 +798,7 @@ Insn::Insn(InsnCode code) : m_code(code) {
   m_data.imm = 0;
 }
 
-Insn::Insn(InsnCode code, decltype(Insn::m_data) data) : m_code(code), m_data(data) {}
+Insn::Insn(InsnCode code, decltype(m_data) data) : m_data(data), m_code(code) {}
 
 InsnCode Insn::GetCode() const {
   return m_code;
@@ -736,6 +807,16 @@ InsnCode Insn::GetCode() const {
 uint16_t Insn::Index() const {
   assert(m_code >= InsnCode::dload && m_code <= InsnCode::ifnull);
   return m_data.index;
+}
+
+ConstantPoolEntry *Insn::GetConstantPoolEntry() {
+  assert(m_code >= InsnCode::anewarray && m_code <= InsnCode::ldc2_w);
+  return m_data.cp;
+}
+
+const ConstantPoolEntry *Insn::GetConstantPoolEntry() const {
+  assert(m_code >= InsnCode::anewarray && m_code <= InsnCode::ldc2_w);
+  return m_data.cp;
 }
 
 uint16_t Insn::GetPC() const {
@@ -797,6 +878,17 @@ PrimitiveType Insn::GetArrayType() const {
 }
 
 VerifyError::VerifyError(const std::string &what, int offset) : std::runtime_error(what), m_offset(offset) {}
+
+std::optional<PrimitiveType> ParsePrimitiveType(char c) {
+  switch (c) {
+    case 'J': return PrimitiveType::long_;
+    case 'I': return PrimitiveType::int_; case 'B': return PrimitiveType::byte;
+    case 'S': return PrimitiveType::short_; case 'C': return PrimitiveType::char_;
+    case 'F': return PrimitiveType::float_; case 'D': return PrimitiveType::double_;
+    case 'Z': return PrimitiveType::boolean; case 'V': return PrimitiveType::void_;
+    default: return std::nullopt;
+  }
+}
 
 const char *CodeName(InsnCode code) {
   using I = InsnCode;
@@ -968,7 +1060,7 @@ Classfile Classfile::parse(ByteReader *reader) {
   std::vector<LookupswitchData> ls;
   std::vector<TableswitchData> ts;
 
-  ParseContext ctx { ts, ls, &cp };
+  ParseContext ctx { ts, ls, &cp, 0, 0 };
 
   auto access_flags = static_cast<AccessFlags>(reader->NextU16("access flags"));
   uint16_t this_class = reader->NextU16("this class");
@@ -1028,6 +1120,8 @@ Classfile Classfile::parse(ByteReader *reader) {
   cf.m_fields = std::move(fields);
   cf.m_methods = std::move(methods);
   cf.m_bootstrap_methods = std::move(bootstrap);
+  cf.m_instance_fields = ctx.current_instance_field_index;
+  cf.m_static_field_count = ctx.current_static_field_index;
 
   return cf;
 }
@@ -1056,5 +1150,11 @@ std::vector<std::string> Classfile::GetInterfaceNames() const {
   }
 
   return result;
+}
+
+void Classfile::SetKlassPointer(PlainKlass *klass) {
+  for (auto& method : m_methods) {
+    method.m_klass = klass;
+  }
 }
 } // bjvm
