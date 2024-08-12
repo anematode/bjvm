@@ -7,6 +7,8 @@
 #include <sstream>
 #include <iostream>
 
+#include "utilities.h"
+
 namespace bjvm::classfile {
 
 /**
@@ -236,6 +238,13 @@ enum RawOpcode {
   jsr_w = 0xc9
 };
 
+// The following fixups are required once all instructions are parsed:
+//  1. lookupswitch/tableswitch need to have their data converted to pointers to the statically allocated data.
+//  2. Branch offsets must be converted to instruction indices.
+//     a. goto, jsr store the offset in the 32-bit imm.
+//     b. if<cond> store the offset in the 16-bit index (interpreted as int16_t).
+//     c. tableswitch, lookupswitch store their offsets in the statically allocated tableswitch/lookupswitch data.
+
 Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
   auto opc = reader->NextU8("instruction opcode");
   using IC = InsnCode;
@@ -390,8 +399,8 @@ Insn Insn::parse(ByteReader *reader, ParseContext* ctx) {
     case if_icmple: return Insn(IC::if_icmple, { .index = reader->NextU16("if_icmple offset") });
     case if_acmpeq: return Insn(IC::if_acmpeq, { .index = reader->NextU16("if_acmpeq offset") });
     case if_acmpne: return Insn(IC::if_acmpne, { .index = reader->NextU16("if_acmpne offset") });
-    case goto_: return Insn(IC::goto_, { .index = reader->NextU16("goto offset") });
-    case jsr: return Insn(IC::jsr, { .index = reader->NextU16("jsr offset") });
+    case goto_: return Insn(IC::goto_, { .imm = reader->NextI16("goto offset") });
+    case jsr: return Insn(IC::jsr, { .imm = reader->NextI16("jsr offset") });
     case ret: return Insn(IC::ret, { .index = reader->NextU8("ret index") });
     case tableswitch: {
       // Tableswitch data is 4-byte aligned for some reason
@@ -587,8 +596,10 @@ CodeAttribute CodeAttribute::parse(ByteReader *reader, ParseContext *parse_conte
         parse_context->m_lookupswitches.at(instruction.m_data.imm).TransformTargets(PcToIndex);
       } else if (instruction.GetCode() == InsnCode::tableswitch) {
         parse_context->m_tableswitches.at(instruction.m_data.imm).TransformTargets(PcToIndex);
+      } else if (instruction.GetCode() == InsnCode::jsr || instruction.GetCode() == InsnCode::goto_) {
+        instruction.m_data.index = CheckedPcToIndex(pc + instruction.m_data.imm);
       } else {
-        instruction.m_data.index = CheckedPcToIndex(pc + instruction.Index());
+        instruction.m_data.index = CheckedPcToIndex(pc + static_cast<int16_t>(instruction.m_data.index));
       }
     }
   }
@@ -603,7 +614,7 @@ CodeAttribute CodeAttribute::parse(ByteReader *reader, ParseContext *parse_conte
       .m_start = CheckedPcToIndex(reader->NextU16("start pc")),
       .m_end = CheckedPcToIndex(reader->NextU16("end pc")),
       .m_handler = CheckedPcToIndex(reader->NextU16("handler pc")),
-      .m_catch_type = CheckedPcToIndex(reader->NextU16("catch type"))
+      .m_catch_type = reader->NextU16("catch type")
     };
     table.m_exceptions.push_back(ent);
   }
@@ -1030,6 +1041,20 @@ std::string Classfile::ToString() const {
 }
 
 const std::string & Classfile::GetName() const {
-  return m_cp.GetUtf8(m_cp.Get<EntryClass>(m_this_class)->name_index);
+  return m_cp.GetUtf8(m_cp.Get<EntryClass>(m_this_class)->m_name_index);
+}
+
+std::optional<std::string> Classfile::GetSuperclassName() const {
+  return m_super_class ? (std::optional { m_cp.GetUtf8(m_cp.Get<EntryClass>(m_super_class)->m_name_index) }) : std::nullopt;
+}
+
+std::vector<std::string> Classfile::GetInterfaceNames() const {
+  std::vector<std::string> result;
+
+  for (auto idx : m_interfaces) {
+    result.push_back(m_cp.GetUtf8(m_cp.Get<EntryClass>(idx)->m_name_index));
+  }
+
+  return result;
 }
 } // bjvm

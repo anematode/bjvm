@@ -8,7 +8,7 @@
 namespace bjvm {
 
 std::string EntryClass::ToString(const ConstantPool *cp) const {
-  return "Class " + (!cp ? std::to_string(name_index) : cp->Get<EntryUtf8>(name_index)->ToString(cp));
+  return "Class " + (!cp ? std::to_string(m_name_index) : cp->Get<EntryUtf8>(m_name_index)->ToString(cp));
 }
 
 std::string EntryString::ToString(const ConstantPool *cp) const {

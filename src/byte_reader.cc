@@ -19,16 +19,16 @@ void ByteReader::SetCurrentComponent(const std::string &component) {
   m_current_component = component;
 }
 
-#define IMPL(name, ty) \
-  ty ByteReader::name(const char *reason) { \
-    ty result;               \
+#define NEXT_IMPL(name, type) \
+  type ByteReader::name(const char *reason) { \
+    type result;               \
     ReadBytes<sizeof(result)>(reason, (char*) &result); \
     return result; \
   }
 
-IMPL(NextU8, uint8_t) IMPL(NextU16, uint16_t) IMPL(NextU32, uint32_t) IMPL(NextU64, uint64_t)
-IMPL(NextI8, int8_t) IMPL(NextI16, int16_t) IMPL(NextI32, int32_t) IMPL(NextI64, int64_t)
-IMPL(NextF32, float) IMPL(NextF64, double)
+NEXT_IMPL(NextU8, uint8_t) NEXT_IMPL(NextU16, uint16_t) NEXT_IMPL(NextU32, uint32_t) NEXT_IMPL(NextU64, uint64_t)
+NEXT_IMPL(NextI8, int8_t) NEXT_IMPL(NextI16, int16_t) NEXT_IMPL(NextI32, int32_t) NEXT_IMPL(NextI64, int64_t)
+NEXT_IMPL(NextF32, float) NEXT_IMPL(NextF64, double)
 
 int ByteReader::GetOriginalOffs() const {
   return m_read + m_base;

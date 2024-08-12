@@ -5,4 +5,7 @@
 #include "heap_object.h"
 
 namespace bjvm {
+int HeapObject::IdentityHashCode() const {
+  return reinterpret_cast<int>(this);
+}
 } // bjvm

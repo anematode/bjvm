@@ -12,10 +12,13 @@
 #include <cstdint>
 
 namespace bjvm {
-
+/**
+ * Helper class for reading class files.
+ */
 class ByteReader {
   std::vector<uint8_t> m_bytes;
-  std::string m_current_component = "file";  // what we're currently reading
+  // what we're currently reading -- for more informative ClassFormat- and VerifyErrors
+  std::string m_current_component = "file";
 
   // Base from the original classfile start (in case we're reading a slice)
   int m_base = 0;

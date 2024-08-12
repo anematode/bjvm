@@ -42,21 +42,37 @@ struct EntryDouble {
   std::string ToString(const ConstantPool* _cp) const;
 };
 
+struct ClassInstance;
 struct EntryClass {
-  uint16_t name_index;
+  uint16_t m_name_index;
+
+  ClassInstance* m_instance = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
 };
+
+namespace native {
+  struct String;
+}
 
 struct EntryString {
   uint16_t string_index;
 
+  native::String* m_string = nullptr;
+
   std::string ToString(const ConstantPool* cp) const;
 };
+
+namespace classfile {
+struct FieldInfo;
+struct MethodInfo;
+}
 
 struct EntryFieldRef {
   uint16_t struct_index;
   uint16_t name_and_type_index;
+
+  classfile::FieldInfo* m_field_info = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
 };
@@ -65,12 +81,16 @@ struct EntryMethodRef {
   uint16_t struct_index;
   uint16_t name_and_type_index;
 
+  classfile::MethodInfo* m_method_info = nullptr;
+
   std::string ToString(const ConstantPool* cp) const;
 };
 
 struct EntryInterfaceMethodRef {
   uint16_t struct_index;
   uint16_t name_and_type_index;
+
+  classfile::MethodInfo* m_method_info = nullptr;
 
   std::string ToString(const ConstantPool* cp) const;
 };
@@ -178,6 +198,10 @@ public:
   }
 
   std::string ToString() const;
+
+  int Size() const {
+    return m_entries.size();
+  }
 
   /** Parse a constant pool from the given reader. */
   static ConstantPool parse(ByteReader *reader);

@@ -1,10 +1,12 @@
+## In-browser JVM
 
-## HOW TO DO
+Goal is to make sufficient infrastructure to interpret and partially JIT-compile an OpenJDK 8 environment in the browser.
+
+Name undecided.
 
 ### Parse most of classfile
 
-TODO
-- Necessary attributes
+- Attributes left
   - StackMapTable
   - RuntimeVisibleAnnotations 
   - RuntimeInvisibleAnnotations 
@@ -14,11 +16,6 @@ TODO
   - RuntimeInvisibleTypeAnnotations 
   - AnnotationDefault
   - MethodParameters
-
-
-- Constant pool
-- Instructions
-- Resolve branch targets
 
 ### Basic interpreter
 
@@ -30,3 +27,7 @@ TODO
 
 ### Bootstrap class loader
 
+
+### Possible WASM64 incompatibilities
+
+- Layout difference in `HeapObject`

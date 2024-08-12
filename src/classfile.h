@@ -50,7 +50,7 @@ enum class InsnCode : uint8_t {
   invokespecial, invokestatic,
 
   /** Indexes into instruction table */
-  goto_, jsr, ret,
+  goto_, jsr,
 
   if_acmpeq, if_acmpne, if_icmpeq, if_icmpne, if_icmplt, if_icmpge,
   if_icmpgt, if_icmple, ifeq, ifne, iflt, ifge, ifgt, ifle, ifnonnull, ifnull,
@@ -59,7 +59,7 @@ enum class InsnCode : uint8_t {
   iconst, dconst, fconst, lconst,
 
   /** Cursed */
-  iinc, invokeinterface, multianewarray, newarray, tableswitch, lookupswitch
+  iinc, invokeinterface, multianewarray, newarray, tableswitch, lookupswitch, ret
 };
 
 enum class PrimitiveType : uint8_t {
@@ -371,7 +371,7 @@ struct MethodInfo {
 };
 
 /**
- * Parsed Java classfile.
+ * Parsed Java classfile, along with VM-specific metadata.
  */
 class Classfile {
   std::vector<TableswitchData> m_tableswitches;    // used to keep instructions compact and trivially copyable
@@ -406,6 +406,20 @@ public:
    * Get the name of this class.
    */
   const std::string& GetName() const;
+
+  /**
+   * Get a MethodInfo for the method with the given name and descriptor.
+   */
+  MethodInfo* GetMethod(const std::string& name, const std::string& descriptor);
+
+  MethodInfo* FindStaticMethod(const char * str, const char * text);
+
+  /**
+   * Get the name of this class's superclass. If this class is java/lang/Object, this should return std::nullopt.
+   */
+  std::optional<std::string> GetSuperclassName() const;
+
+  std::vector<std::string> GetInterfaceNames() const;
 };
 
 }
